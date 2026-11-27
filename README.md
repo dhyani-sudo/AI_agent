@@ -24,6 +24,10 @@ AI_agent/
 ├── remove_silence.py  <- the silence remover script
 ├── merge_videos.py    <- the video merger script
 ├── make_reel.sh       <- one command: merges ALL clips in input/ into one reel
+├── app.py             <- simple web interface (run: python app.py)
+├── start_app.bat      <- double-click launcher for the interface (Windows)
+├── diagnose.py        <- tests everything, writes + uploads a diagnostic report
+├── diagnostics/       <- diagnostic reports (uploaded to GitHub)
 ├── input/             <- put your raw videos here
 ├── output/            <- finished videos appear here
 └── temp/              <- scratch space (can be deleted any time)
@@ -112,6 +116,37 @@ passed through:
 bash make_reel.sh --fade 0.8
 bash make_reel.sh --fade 0 --fit crop
 ```
+
+## The simple interface
+
+```powershell
+python app.py
+```
+
+(or double-click `start_app.bat`). A page opens at
+http://localhost:8765 where you can:
+
+- remove silence from any video in `input/` with one click
+- merge all clips in `input/` into one reel
+- run diagnostics
+- watch the live log and see the results in `output/`
+
+The server runs only on your own computer (localhost) - nothing is
+exposed to the network.
+
+## Diagnostics
+
+If something does not work, run:
+
+```powershell
+python diagnose.py
+```
+
+It checks Python, FFmpeg, and the project files, then runs a real
+functional test of both scripts on tiny synthetic videos. The report is
+saved in `diagnostics/` and (if all tests pass) automatically committed
+and pushed to GitHub, so it can be shared when asking for help. Use
+`python diagnose.py --no-push` to keep the report local.
 
 ## Roadmap
 

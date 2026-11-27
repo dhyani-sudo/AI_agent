@@ -1,0 +1,10 @@
+# Videos never belong in git
+input/*
+output/*
+temp/*
+!input/.gitkeep
+!output/.gitkeep
+!temp/.gitkeep
+
+__pycache__/
+*.pyc

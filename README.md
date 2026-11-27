@@ -128,8 +128,13 @@ bash make_reel.sh --fade 0 --fit crop
 python app.py
 ```
 
-(or double-click `start_app.bat`). A page opens at
-http://localhost:8765 where you can:
+(or double-click `start_app.bat`). The launcher does everything:
+
+1. pulls the latest version from GitHub (`git pull`)
+2. runs diagnostics - if all tests pass, a report is uploaded to GitHub
+   (each launch adds one small report file; skip the checks with
+   `start_app.bat skip` or when in a hurry)
+3. starts the app - a page opens at http://localhost:8765 where you can:
 
 - remove silence from any video in your input folder with one click
 - merge all clips in your input folder into one reel

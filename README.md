@@ -19,6 +19,7 @@ What is coming next:
 ```
 AI_agent/
 ├── setup.ps1          <- run this ONCE to set everything up
+├── install_git.ps1    <- optional: installs Git (only needed for git clone)
 ├── remove_silence.py  <- the silence remover script
 ├── input/             <- put your raw videos here
 ├── output/            <- finished videos appear here

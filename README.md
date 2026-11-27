@@ -23,15 +23,16 @@ AI_agent/
 ├── install_git.ps1    <- optional: installs Git (only needed for git clone)
 ├── remove_silence.py  <- the silence remover script
 ├── merge_videos.py    <- the video merger script
-├── make_reel.sh       <- one command: merges ALL clips in input/ into one reel
+├── make_reel.sh       <- one command: merges ALL clips from the input folder
 ├── app.py             <- simple web interface (run: python app.py)
 ├── start_app.bat      <- double-click launcher for the interface (Windows)
 ├── diagnose.py        <- tests everything, writes + uploads a diagnostic report
 ├── diagnostics/       <- diagnostic reports (uploaded to GitHub)
-├── input/             <- put your raw videos here
-├── output/            <- finished videos appear here
-└── temp/              <- scratch space (can be deleted any time)
+└── output/            <- finished reels appear here (created automatically)
 ```
+
+Your video clips can live anywhere: the web app lets you point it to
+any folder (saved in `config.json`, not committed).
 
 ## Setup (Windows, one time)
 
@@ -44,20 +45,20 @@ AI_agent/
    powershell -ExecutionPolicy Bypass -File .\setup.ps1
    ```
 
-This installs FFmpeg (via winget) and creates the `input`, `output`,
-and `temp` folders.
+This installs FFmpeg (via winget).
 
 ## Usage
 
-Put a video in the `input\` folder, then:
+Point the app to your clips folder (in the web page, or edit
+`config.json`), put a video there, then:
 
 ```powershell
-python remove_silence.py input\myvideo.mp4
+python remove_silence.py "C:\path\to\myvideo.mp4"
 ```
 
-Result: `input\myvideo_tight.mp4`, with every long gap shortened to a
-small pause. The script prints every silence it found and how much time
-was saved.
+Result: `myvideo_tight.mp4` next to the original, with every long gap
+shortened to a small pause. The script prints every silence it found and
+how much time was saved.
 
 ### Tuning
 
@@ -74,7 +75,7 @@ pacing stays relaxed. For talking-head clips, try `--min-silence 0.6`.
 ## Merging multiple clips into one reel
 
 ```powershell
-python merge_videos.py input\part1.mp4 input\part2.mp4 input\part3.mp4
+python merge_videos.py part1.mp4 part2.mp4 part3.mp4
 ```
 
 Result: `output\reel.mp4` in vertical 1080x1920 (9:16, perfect for
@@ -83,7 +84,7 @@ YouTube Shorts), with a 0.5s crossfade between clips.
 You can also use a wildcard to take clips in name order:
 
 ```powershell
-python merge_videos.py "input\part*.mp4"
+python merge_videos.py "C:\path\to\clips\part*.mp4"
 ```
 
 ### Tuning
@@ -107,7 +108,8 @@ From Git Bash, inside the repo folder:
 bash make_reel.sh
 ```
 
-That merges **every video in `input/`** (in alphabetical order) into one
+That merges **every video in your input folder** (the one set in the web
+app or `config.json`; default `input/`, in alphabetical order) into one
 reel saved as `output/reel_YYYYMMDD_HHMMSS.mp4` - each run gets its own
 timestamped file, so nothing is ever overwritten. Extra options are
 passed through:
@@ -126,10 +128,11 @@ python app.py
 (or double-click `start_app.bat`). A page opens at
 http://localhost:8765 where you can:
 
-- remove silence from any video in `input/` with one click
-- merge all clips in `input/` into one reel
+- remove silence from any video in your input folder with one click
+- merge all clips in your input folder into one reel
 - run diagnostics
 - watch the live log and see the results in `output/`
+- change the input folder (saved in `config.json`)
 
 The server runs only on your own computer (localhost) - nothing is
 exposed to the network.

@@ -46,15 +46,11 @@ if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
     }
 }
 
-# --- 3. Create project folders ---------------------------------------------
-Write-Step "Creating project folders..."
-foreach ($folder in @("input", "output", "temp")) {
-    New-Item -ItemType Directory -Force -Path $folder | Out-Null
-    Write-Ok "$folder\"
-}
+# --- 3. Done ---------------------------------------------------------------
 
 Write-Host ""
 Write-Host "Setup complete." -ForegroundColor Green
 Write-Host "Next steps:"
-Write-Host "  1. Put a test video in the input\ folder"
-Write-Host "  2. Run:  python remove_silence.py input\myvideo.mp4"
+Write-Host "  1. Start the app:        python app.py"
+Write-Host "     (or double-click start_app.bat)"
+Write-Host "  2. In the web page, point the input folder to where your videos are"

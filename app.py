@@ -17,6 +17,7 @@ exposed to the network.
 import datetime
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -27,6 +28,7 @@ from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parent
 PORT = 8765
+CONFIG_PATH = ROOT / "config.json"
 
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm", ".avi"}
 GLOB_PATTERNS = ["*.mp4", "*.MP4", "*.mov", "*.MOV", "*.mkv", "*.webm", "*.avi"]
@@ -70,23 +72,69 @@ def start_job(title: str, cmd: list) -> tuple:
     return True, ""
 
 
-def list_files(folder: str) -> list:
-    directory = ROOT / folder
-    directory.mkdir(exist_ok=True)
+def natural_key(path: Path):
+    return [int(t) if t.isdigit() else t.lower()
+            for t in re.split(r"(\d+)", path.name)]
+
+
+def get_config() -> dict:
+    if CONFIG_PATH.is_file():
+        try:
+            return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {}
+
+
+def get_input_dir() -> Path:
+    configured = get_config().get("input_dir", "input")
+    path = Path(configured)
+    if not path.is_absolute():
+        path = ROOT / path
+    path = path.resolve()
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def set_input_dir(value: str) -> tuple:
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = ROOT / path
+    path = path.resolve()
+    if not path.is_dir():
+        return False, f"Folder does not exist: {path}"
+    CONFIG_PATH.write_text(
+        json.dumps({"input_dir": str(path)}, indent=2), encoding="utf-8"
+    )
+    return True, str(path)
+
+
+def list_video_names() -> list:
+    input_dir = get_input_dir()
     return sorted(
-        p.name for p in directory.iterdir()
-        if p.is_file() and not p.name.startswith(".")
+        (p.name for p in input_dir.iterdir()
+         if p.is_file() and not p.name.startswith(".")),
+        key=lambda n: [int(t) if t.isdigit() else t.lower()
+                       for t in re.split(r"(\d+)", n)],
     )
 
 
 def build_merge_cmd() -> list:
-    patterns = [f"input/{pat}" for pat in GLOB_PATTERNS]
+    input_dir = get_input_dir()
+    files = sorted(
+        (p for p in input_dir.iterdir()
+         if p.is_file() and p.suffix.lower() in VIDEO_EXTENSIONS
+         and not p.name.startswith(".")),
+        key=natural_key,
+    )
     stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    return [sys.executable, "merge_videos.py", *patterns,
-            "-o", f"output/reel_{stamp}.mp4"]
+    cmd = [sys.executable, "merge_videos.py"]
+    cmd += [str(p) for p in files]
+    cmd += ["-o", f"output/reel_{stamp}.mp4"]
+    return cmd
 
 
-PAGE = """<!DOCTYPE html>
+PAGE = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -122,9 +170,15 @@ PAGE = """<!DOCTYPE html>
 </div>
 
 <div class="card">
+  <h2>Input folder</h2>
+  <input id="inputDir" style="width:75%; padding:6px; border-radius:6px; border:1px solid #2c3a55; background:#0b0e14; color:#e8eaf0;"> <button onclick="setDir()">Set folder</button>
+  <div class="muted">Point this to wherever your video clips live (e.g. C:\Users\evile\Videos). Default: the app's own <b>input</b> folder.</div>
+</div>
+
+<div class="card">
   <h2>Single video: remove silence</h2>
   <div id="inputList"><span class="muted">Loading...</span></div>
-  <div class="muted">Put videos in the <b>input</b> folder, then refresh this page.</div>
+  <div class="muted">Videos from the input folder above appear here. Refresh the page after adding files.</div>
 </div>
 
 <div class="card">
@@ -156,6 +210,9 @@ async function refresh() {
     const logs = document.getElementById('log');
     logs.scrollTop = logs.scrollHeight;
 
+    if (document.activeElement !== document.getElementById('inputDir'))
+      document.getElementById('inputDir').value = s.input_dir;
+
     const inList = document.getElementById('inputList');
     inList.innerHTML = s.input_files.length
       ? s.input_files.map(f =>
@@ -173,6 +230,19 @@ async function refresh() {
     document.getElementById('diagBtn').disabled = busy;
     document.querySelectorAll('#inputList button').forEach(b => b.disabled = busy);
   } catch (e) { /* server restarting */ }
+}
+
+async function setDir() {
+  const value = document.getElementById('inputDir').value.trim();
+  if (!value) return;
+  const r = await fetch('/api/config', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({input_dir: value})
+  });
+  const j = await r.json();
+  if (!j.ok) alert('Could not set folder: ' + j.error);
+  refresh();
 }
 
 async function run(action, file) {
@@ -210,9 +280,19 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/status":
             with _lock:
                 snapshot = {**_state, "log": list(_state["log"])}
-            snapshot["input_files"] = list_files("input")
-            snapshot["output_files"] = list_files("output")
+            snapshot["input_dir"] = str(get_input_dir())
+            snapshot["input_files"] = list_video_names()
+            out_dir = ROOT / "output"
+            out_dir.mkdir(exist_ok=True)
+            snapshot["output_files"] = sorted(
+                p.name for p in out_dir.iterdir()
+                if p.is_file() and not p.name.startswith(".")
+            )
             self._send(200, json.dumps(snapshot))
+        elif path == "/api/config":
+            self._send(200, json.dumps({
+                "input_dir": str(get_input_dir()),
+            }))
         elif path == "/open/output":
             folder = ROOT / "output"
             folder.mkdir(exist_ok=True)
@@ -231,7 +311,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(404, json.dumps({"error": "not found"}))
 
     def do_POST(self):
-        if urlparse(self.path).path != "/api/run":
+        path = urlparse(self.path).path
+        if path not in ("/api/run", "/api/config"):
             return self._send(404, json.dumps({"error": "not found"}))
         try:
             length = int(self.headers.get("Content-Length", 0))
@@ -239,15 +320,25 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, json.JSONDecodeError):
             return self._send(400, json.dumps({"ok": False, "error": "bad request"}))
 
+        if path == "/api/config":
+            value = payload.get("input_dir", "").strip()
+            if not value:
+                return self._send(400, json.dumps({"ok": False, "error": "empty folder"}))
+            ok, message = set_input_dir(value)
+            return self._send(200, json.dumps({"ok": ok, "error": message}))
+
         action = payload.get("action", "")
         if action == "silence":
             name = Path(payload.get("file", "")).name
-            target = ROOT / "input" / name
+            target = get_input_dir() / name
             if not name or not target.is_file():
-                return self._send(400, json.dumps({"ok": False, "error": "file not found in input/"}))
+                return self._send(400, json.dumps({"ok": False, "error": "file not found in the input folder"}))
             ok, error = start_job(f"Remove silence: {name}",
                                   [sys.executable, "remove_silence.py", str(target)])
         elif action == "merge":
+            if not list_video_names():
+                return self._send(400, json.dumps({"ok": False,
+                    "error": "the input folder contains no videos"}))
             ok, error = start_job("Merge all clips", build_merge_cmd())
         elif action == "diagnose":
             ok, error = start_job("Diagnostics", [sys.executable, "diagnose.py"])

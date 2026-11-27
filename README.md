@@ -31,8 +31,11 @@ AI_agent/
 └── output/            <- finished reels appear here (created automatically)
 ```
 
-Your video clips can live anywhere: the web app lets you point it to
-any folder (saved in `config.json`, not committed).
+Your clips can live anywhere: the web app lets you point the **input**
+folder to any existing folder and the **output** folder to any location
+(new output folders are created automatically). Both choices are saved
+in `config.json`, which is not committed - they also apply to
+`make_reel.sh`.
 
 ## Setup (Windows, one time)
 
@@ -131,8 +134,8 @@ http://localhost:8765 where you can:
 - remove silence from any video in your input folder with one click
 - merge all clips in your input folder into one reel
 - run diagnostics
-- watch the live log and see the results in `output/`
-- change the input folder (saved in `config.json`)
+- watch the live log and see the results in the output folder
+- change the input and output folders (saved in `config.json`)
 
 The server runs only on your own computer (localhost) - nothing is
 exposed to the network.

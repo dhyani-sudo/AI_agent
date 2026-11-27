@@ -6,9 +6,9 @@
 #     bash make_reel.sh --fade 0.8
 #     bash make_reel.sh --fade 0 --fit crop
 #
-# The input folder is the one configured in config.json (set from the web
-# app), or the repo's input/ folder if no config exists. Results go to
-# output/ with a timestamp in the name, so nothing gets overwritten.
+# The folders are the ones configured in config.json (set from the web
+# app), or input/ and output/ inside the repo if no config exists. Each
+# run creates its own timestamped reel, so nothing gets overwritten.
 
 set -e
 cd "$(dirname "$0")"
@@ -27,6 +27,12 @@ if [ ! -d "$input_dir" ]; then
     exit 1
 fi
 
+output_dir="output"
+if [ -f config.json ]; then
+    configured_out=$(python -c "import json;print(json.load(open('config.json')).get('output_dir',''))" 2>/dev/null || true)
+    [ -n "$configured_out" ] && output_dir="$configured_out"
+fi
+
 shopt -s nullglob
 clips=("$input_dir"/*.mp4 "$input_dir"/*.MP4 "$input_dir"/*.mov "$input_dir"/*.MOV \
        "$input_dir"/*.mkv "$input_dir"/*.webm "$input_dir"/*.avi)
@@ -40,8 +46,8 @@ fi
 echo "Found ${#clips[@]} clip(s) in $input_dir, merging in alphabetical order:"
 printf '  %s\n' "${clips[@]}"
 
-mkdir -p output
-out="output/reel_$(date +%Y%m%d_%H%M%S).mp4"
+mkdir -p "$output_dir"
+out="$output_dir/reel_$(date +%Y%m%d_%H%M%S).mp4"
 
 python merge_videos.py "${clips[@]}" -o "$out" "$@"
 

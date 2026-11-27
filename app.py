@@ -86,26 +86,41 @@ def get_config() -> dict:
     return {}
 
 
-def get_input_dir() -> Path:
-    configured = get_config().get("input_dir", "input")
-    path = Path(configured)
+def _resolve_folder(value: str) -> Path:
+    path = Path(value).expanduser()
     if not path.is_absolute():
         path = ROOT / path
-    path = path.resolve()
+    return path.resolve()
+
+
+def get_input_dir() -> Path:
+    path = _resolve_folder(get_config().get("input_dir", "input"))
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
-def set_input_dir(value: str) -> tuple:
-    path = Path(value).expanduser()
-    if not path.is_absolute():
-        path = ROOT / path
-    path = path.resolve()
+def get_output_dir() -> Path:
+    path = _resolve_folder(get_config().get("output_dir", "output"))
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def set_dir(key: str, value: str) -> tuple:
+    path = _resolve_folder(value)
     if not path.is_dir():
-        return False, f"Folder does not exist: {path}"
-    CONFIG_PATH.write_text(
-        json.dumps({"input_dir": str(path)}, indent=2), encoding="utf-8"
-    )
+        if key == "output_dir":
+            try:
+                path.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                return False, f"Could not create folder: {exc}"
+        else:
+            return False, f"Folder does not exist: {path}"
+    config = get_config()
+    config[key] = str(path)
+    recent = [p for p in config.get("recent_dirs", []) if p != str(path)]
+    recent.insert(0, str(path))
+    config["recent_dirs"] = recent[:10]
+    CONFIG_PATH.write_text(json.dumps(config, indent=2), encoding="utf-8")
     return True, str(path)
 
 
@@ -128,10 +143,8 @@ def build_merge_cmd() -> list:
         key=natural_key,
     )
     stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    cmd = [sys.executable, "merge_videos.py"]
-    cmd += [str(p) for p in files]
-    cmd += ["-o", f"output/reel_{stamp}.mp4"]
-    return cmd
+    out = get_output_dir() / f"reel_{stamp}.mp4"
+    return [sys.executable, "merge_videos.py", *[str(p) for p in files], "-o", str(out)]
 
 
 PAGE = r"""<!DOCTYPE html>
@@ -170,9 +183,16 @@ PAGE = r"""<!DOCTYPE html>
 </div>
 
 <div class="card">
-  <h2>Input folder</h2>
-  <input id="inputDir" style="width:75%; padding:6px; border-radius:6px; border:1px solid #2c3a55; background:#0b0e14; color:#e8eaf0;"> <button onclick="setDir()">Set folder</button>
-  <div class="muted">Point this to wherever your video clips live (e.g. C:\Users\evile\Videos). Default: the app's own <b>input</b> folder.</div>
+  <h2>Folders</h2>
+  <div class="file"><span><b>Input</b> (your clips)</span></div>
+  <input id="inputDir" style="width:70%; padding:6px; border-radius:6px; border:1px solid #2c3a55; background:#0b0e14; color:#e8eaf0;">
+  <button onclick="setDir('input_dir','inputDir')">Set input folder</button>
+  <select id="inputRecent" onchange="pickRecent('input_dir','inputDir',this)"></select>
+  <div class="file" style="margin-top:10px;"><span><b>Output</b> (finished reels)</span></div>
+  <input id="outputDir" style="width:70%; padding:6px; border-radius:6px; border:1px solid #2c3a55; background:#0b0e14; color:#e8eaf0;">
+  <button onclick="setDir('output_dir','outputDir')">Set output folder</button>
+  <select id="outputRecent" onchange="pickRecent('output_dir','outputDir',this)"></select>
+  <div class="muted">Type a folder path (e.g. C:\Users\evile\Videos) or pick a recent one. Choices are saved on your PC.</div>
 </div>
 
 <div class="card">
@@ -212,6 +232,20 @@ async function refresh() {
 
     if (document.activeElement !== document.getElementById('inputDir'))
       document.getElementById('inputDir').value = s.input_dir;
+    if (document.activeElement !== document.getElementById('outputDir'))
+      document.getElementById('outputDir').value = s.output_dir;
+
+    const recent = s.recent_dirs || [];
+    for (const [selId, current] of [['inputRecent', s.input_dir], ['outputRecent', s.output_dir]]) {
+      const sel = document.getElementById(selId);
+      const wanted = JSON.stringify(recent);
+      if (sel.dataset.sig !== wanted) {
+        sel.dataset.sig = wanted;
+        sel.innerHTML = '<option value="">Recent folders...</option>' +
+          recent.map(p => `<option value="${p}">${p}</option>`).join('');
+      }
+      sel.value = '';
+    }
 
     const inList = document.getElementById('inputList');
     inList.innerHTML = s.input_files.length
@@ -232,17 +266,23 @@ async function refresh() {
   } catch (e) { /* server restarting */ }
 }
 
-async function setDir() {
-  const value = document.getElementById('inputDir').value.trim();
+async function setDir(key, fieldId) {
+  const value = document.getElementById(fieldId).value.trim();
   if (!value) return;
   const r = await fetch('/api/config', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({input_dir: value})
+    body: JSON.stringify({key: key, value: value})
   });
   const j = await r.json();
   if (!j.ok) alert('Could not set folder: ' + j.error);
   refresh();
+}
+
+async function pickRecent(key, fieldId, sel) {
+  if (!sel.value) return;
+  document.getElementById(fieldId).value = sel.value;
+  await setDir(key, fieldId);
 }
 
 async function run(action, file) {
@@ -282,20 +322,22 @@ class Handler(BaseHTTPRequestHandler):
                 snapshot = {**_state, "log": list(_state["log"])}
             snapshot["input_dir"] = str(get_input_dir())
             snapshot["input_files"] = list_video_names()
-            out_dir = ROOT / "output"
-            out_dir.mkdir(exist_ok=True)
+            out_dir = get_output_dir()
+            snapshot["output_dir"] = str(out_dir)
             snapshot["output_files"] = sorted(
                 p.name for p in out_dir.iterdir()
                 if p.is_file() and not p.name.startswith(".")
             )
+            snapshot["recent_dirs"] = get_config().get("recent_dirs", [])
             self._send(200, json.dumps(snapshot))
         elif path == "/api/config":
             self._send(200, json.dumps({
                 "input_dir": str(get_input_dir()),
+                "output_dir": str(get_output_dir()),
+                "recent_dirs": get_config().get("recent_dirs", []),
             }))
         elif path == "/open/output":
-            folder = ROOT / "output"
-            folder.mkdir(exist_ok=True)
+            folder = get_output_dir()
             try:
                 if hasattr(os, "startfile"):
                     os.startfile(str(folder))
@@ -321,10 +363,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400, json.dumps({"ok": False, "error": "bad request"}))
 
         if path == "/api/config":
-            value = payload.get("input_dir", "").strip()
-            if not value:
-                return self._send(400, json.dumps({"ok": False, "error": "empty folder"}))
-            ok, message = set_input_dir(value)
+            key = payload.get("key", "")
+            value = payload.get("value", "").strip()
+            if key not in ("input_dir", "output_dir") or not value:
+                return self._send(400, json.dumps({"ok": False, "error": "bad request"}))
+            ok, message = set_dir(key, value)
             return self._send(200, json.dumps({"ok": ok, "error": message}))
 
         action = payload.get("action", "")

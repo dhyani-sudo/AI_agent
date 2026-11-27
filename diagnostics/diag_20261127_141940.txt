@@ -1,0 +1,28 @@
+AI Video Reels Agent - diagnostic report 20261127_141940
+=== Environment ===
+[PASS] Python - 3.12.14 on Linux
+[PASS] FFmpeg in PATH - ffmpeg version n8.0.1-48-g0592be14ff-20260116 Copyright (c) 2000-2025 the FFmpeg developers
+[PASS] ffprobe in PATH
+[PASS] File setup.ps1
+[PASS] File remove_silence.py
+[PASS] File merge_videos.py
+[PASS] File make_reel.sh
+[PASS] File app.py
+[PASS] File diagnose.py
+
+=== Test: remove_silence.py ===
+[PASS] create synthetic clip (4s tone + 3s silence)
+[PASS] script exits cleanly
+[PASS] output file created
+[PASS] output duration ~4.3s - got 4.36s
+
+=== Test: merge_videos.py ===
+[PASS] create synthetic clips (3s + 4s)
+[PASS] script exits cleanly
+[PASS] merged duration ~6.0s (3+4-2x0.5) - got 6.56s
+
+=== Output specs ===
+[PASS] merged resolution 1080x1920 - 1080x1920
+
+=== Summary ===
+[PASS] ALL TESTS PASSED

@@ -7,10 +7,11 @@ What it does today:
 
 - Removes long silences from a video, keeping a short natural pause
   (so meditation content still breathes)
+- Merges multiple clips into one vertical reel (1080x1920) with
+  crossfade transitions
 
 What is coming next:
 
-- Merge multiple clips into one reel with smooth transitions
 - Auto-captions with Whisper
 - Publishing to YouTube Shorts via the YouTube Data API
 
@@ -21,6 +22,7 @@ AI_agent/
 ├── setup.ps1          <- run this ONCE to set everything up
 ├── install_git.ps1    <- optional: installs Git (only needed for git clone)
 ├── remove_silence.py  <- the silence remover script
+├── merge_videos.py    <- the video merger script
 ├── input/             <- put your raw videos here
 ├── output/            <- finished videos appear here
 └── temp/              <- scratch space (can be deleted any time)
@@ -64,9 +66,37 @@ was saved.
 For calm meditation content, try `--min-silence 1.5 --keep 0.5` so the
 pacing stays relaxed. For talking-head clips, try `--min-silence 0.6`.
 
+## Merging multiple clips into one reel
+
+```powershell
+python merge_videos.py input\part1.mp4 input\part2.mp4 input\part3.mp4
+```
+
+Result: `output\reel.mp4` in vertical 1080x1920 (9:16, perfect for
+YouTube Shorts), with a 0.5s crossfade between clips.
+
+You can also use a wildcard to take clips in name order:
+
+```powershell
+python merge_videos.py "input\part*.mp4"
+```
+
+### Tuning
+
+| Option      | Default | Meaning                                                       |
+| ----------- | ------- | ------------------------------------------------------------- |
+| `--fade`    | `0.5`   | Crossfade seconds between clips (`0` = hard cut)              |
+| `--fit`     | `pad`   | `pad` = black bars around odd shapes, `crop` = fill and cut   |
+| `--fps`     | `30`    | Output frame rate                                             |
+| `--width` / `--height` | `1080` / `1920` | Output resolution                      |
+| `-o PATH`   | —       | Custom output path                                            |
+
+Use `--fit crop` when you want clips to fill the whole vertical frame
+(edges get cut) instead of showing black bars.
+
 ## Roadmap
 
-1. **Phase 1 - Editing core**: silence removal (done), merging clips
+1. **Phase 1 - Editing core**: silence removal (done), merging clips (done)
 2. **Phase 2 - AI polish**: Whisper auto-captions, auto titles/descriptions
 3. **Phase 3 - Publishing**: YouTube Shorts upload via YouTube Data API
 4. **Phase 4 - Orchestration**: one command per reel, then watch-folder automation

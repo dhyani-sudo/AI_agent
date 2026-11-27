@@ -23,6 +23,7 @@ AI_agent/
 ├── install_git.ps1    <- optional: installs Git (only needed for git clone)
 ├── remove_silence.py  <- the silence remover script
 ├── merge_videos.py    <- the video merger script
+├── make_reel.sh       <- one command: merges ALL clips in input/ into one reel
 ├── input/             <- put your raw videos here
 ├── output/            <- finished videos appear here
 └── temp/              <- scratch space (can be deleted any time)
@@ -93,6 +94,24 @@ python merge_videos.py "input\part*.mp4"
 
 Use `--fit crop` when you want clips to fill the whole vertical frame
 (edges get cut) instead of showing black bars.
+
+## The easy way: one command
+
+From Git Bash, inside the repo folder:
+
+```bash
+bash make_reel.sh
+```
+
+That merges **every video in `input/`** (in alphabetical order) into one
+reel saved as `output/reel_YYYYMMDD_HHMMSS.mp4` - each run gets its own
+timestamped file, so nothing is ever overwritten. Extra options are
+passed through:
+
+```bash
+bash make_reel.sh --fade 0.8
+bash make_reel.sh --fade 0 --fit crop
+```
 
 ## Roadmap
 
